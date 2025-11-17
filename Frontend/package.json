@@ -1,0 +1,54 @@
+{
+  "name": "edunova",
+  "version": "0.1.0",
+  "private": true,
+  "homepage": ".",
+  "description": "EduNova - Plateforme d'e-learning moderne avec React, Node.js et MySQL",
+  "main": "src/index.js",
+  "author": "Emna Benhazem",
+  "license": "ISC",
+  "dependencies": {
+    "@dataconnect/generated": "file:src/dataconnect-generated",
+    "@react-oauth/google": "^0.12.2",
+    "axios": "^1.7.7",
+    "bcryptjs": "^3.0.3",
+    "firebase": "^12.5.0",
+    "framer-motion": "^11.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-icons": "^5.3.0",
+    "react-router-dom": "^6.26.2",
+    "sweetalert2": "^11.26.3",
+    "web-vitals": "^3.5.2"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.0.1",
+    "@testing-library/user-event": "^14.5.2",
+    "react-scripts": "5.0.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
