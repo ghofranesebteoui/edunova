@@ -3,8 +3,10 @@ const {
   register,
   googleLogin,
   logout,
-  resetPasword,
-  resetPasswordWithToken // ⬅️ Ajoutez ceci
+  resetPassword,
+  resetPasswordWithToken,
+  verifyEmail,
+  resendVerificationEmail
 } = require('../auth/auth.controller');
 
 const authMiddleware = require('../../middlewares/authmiddleware');
@@ -12,13 +14,15 @@ const router = require('express').Router();
 
 router.post('/register', register);
 router.post('/login', login);
-router.post('/google-login', authMiddleware, googleLogin);
+router.post('/google-login', googleLogin); // pas besoin de middleware
 router.post('/logout', authMiddleware, logout);
 
-// Route pour demander la réinitialisation (envoie l'email)
-router.post('/forgot-password', resetPasword);
-
-// ⬇️ NOUVELLE ROUTE - Pour réinitialiser effectivement le mot de passe
+// Réinitialisation mot de passe
+router.post('/forgot-password', resetPassword);
 router.post('/reset-password/:token', resetPasswordWithToken);
+
+// Vérification d'email
+router.get('/verify-email/:token', verifyEmail);
+router.post('/resend-verification', resendVerificationEmail);
 
 module.exports = router;

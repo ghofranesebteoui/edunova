@@ -7,83 +7,64 @@ import axios from 'axios';
 import './LoginPage.css';
 import { signInWithPopup, getAdditionalUserInfo } from 'firebase/auth';
 import { auth, provider } from '../authGoogle';
+import Swal from 'sweetalert2';
 
-const LoginPage = () => {
+const LoginPage = ({ setUser }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  // === REDIRECTION SELON RÔLE ===
   const redirectToDashboard = (role) => {
     if (role === 'admin') navigate('/admin');
     else if (role === 'enseignant') navigate('/enseignant');
     else navigate('/etudiant');
   };
 
-  // === GOOGLE LOGIN ===
-  const handleGoogleLogin = async () => {
+  const handleResendVerification = async () => {
+    const email = document.querySelector('input[name="email"]').value;
     try {
-      const result = await signInWithPopup(auth, provider);
-      const additionalUserInfo = getAdditionalUserInfo(result);
-
-      // ✅ CORRECTION : Envoyez le mot de passe en clair, le backend le hachera
-      const data = {
-        first_name: additionalUserInfo.profile.given_name || 'Utilisateur',
-        last_name: additionalUserInfo.profile.family_name || 'Google',
-        email: additionalUserInfo.profile.email,
-        password: "pass", // Le backend hachera ce mot de passe
-        role: "etudiant",
-      };
-
-      try {
-        const res = await axios.post('http://localhost:5000/api/auth/register', data);
-        
-        // Récupérer le token et l'utilisateur si le backend les renvoie
-        if (res.data.data) {
-          const token = res.data.data.token;
-          const user = res.data.data.user;
-          
-          if (token) localStorage.setItem('token', token);
-          if (user) localStorage.setItem('user', JSON.stringify(user));
-        }
-
-        setError('');
-        navigate('/etudiant');
-      } catch (err) {
-        // Si l'utilisateur existe déjà, essayez de vous connecter
-        if (err.response?.status === 400 || err.response?.data?.error?.includes('existe')) {
-          try {
-            const loginRes = await axios.post('http://localhost:5000/api/auth/login', {
-              email: additionalUserInfo.profile.email,
-              password: "pass"
-            });
-
-            const token = loginRes.data.data.token;
-            const user = loginRes.data.data.user;
-            
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
-            
-            navigate(`/${user.role}`);
-          } catch (loginErr) {
-            setError('Erreur de connexion Google');
-          }
-        } else {
-          setError(err.response?.data?.error || 'Erreur inscription');
-        }
-        return;
-      }
-
-    } catch (error) {
-      console.error('Error:', error.code, error.message);
-      setError('Erreur lors de la connexion avec Google');
+      await axios.post('http://localhost:5000/api/auth/resend-verification', { email });
+      setError('Email de vérification renvoyé ! Vérifiez votre boîte mail.');
+    } catch (err) {
+      setError("Erreur lors de l'envoi de l'email");
     }
   };
 
-  // === CONNEXION (email/password classique) ===
+  const handleGoogleLogin = async () => {
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+
+    const googleData = {
+      email: user.email,
+      first_name: user.displayName?.split(" ")[0],
+      last_name: user.displayName?.split(" ")[1] || "",
+      uid: user.uid,
+    };
+
+    const res = await axios.post(
+      "http://localhost:5000/api/auth/google-login",
+      googleData
+    );
+
+    const { token, user: userData } = res.data.data;
+
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(userData));
+    setUser(userData);
+
+    navigate(`/${userData.role}`);
+  } catch (error) {
+    console.error("❌ Erreur Google login:", error);
+    setError("Erreur lors de la connexion avec Google.");
+  }
+};
+
+
   const handleLogin = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
+
     const cred = {
       email: formData.get('email').trim(),
       password: formData.get('password'),
@@ -91,27 +72,40 @@ const LoginPage = () => {
 
     try {
       const res = await axios.post('http://localhost:5000/api/auth/login', cred);
-  
+
       const token = res.data.data.token;
       const user = res.data.data.user;
-      
+
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
-    
+      setUser(user);   // 🔥 Correction
+
       setError('');
-      navigate(`/${user.role}`);
-      window.location.reload();
-      
+      redirectToDashboard(user.role);
     } catch (err) {
-      console.log(err);
-      setError(err.response?.data?.error || 'Email ou mot de passe incorrect');
+      if (err.response?.data?.needsVerification) {
+        setError(
+          <div>
+            {err.response.data.error}
+            <button
+              type="button"
+              style={{ marginLeft: '10px', textDecoration: 'underline', cursor: 'pointer' }}
+              onClick={handleResendVerification}
+            >
+              Renvoyer l'email
+            </button>
+          </div>
+        );
+      } else {
+        setError(err.response?.data?.error || 'Email ou mot de passe incorrect');
+      }
     }
   };
 
-  // === INSCRIPTION ===
   const handleRegister = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
+
     const data = {
       first_name: formData.get('first_name').trim(),
       last_name: formData.get('last_name').trim(),
@@ -126,11 +120,10 @@ const LoginPage = () => {
     }
 
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/register', data);
-      const user = res.data.data.user;
-
+      await axios.post('http://localhost:5000/api/auth/register', data);
       setError('');
-      redirectToDashboard(user.role);
+      Swal.fire('Succès', 'Inscription réussie ! Un email de vérification a été envoyé.', 'success');
+      setIsSignUp(false);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur inscription');
     }
@@ -139,22 +132,13 @@ const LoginPage = () => {
   return (
     <div className="login-page-wrapper">
       <AnimatePresence mode="wait">
-        {/* === PAGE CONNEXION === */}
         {!isSignUp ? (
-          <motion.div
-            key="login"
-            className="page-content"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <motion.div
-              className="form-section"
-              initial={{ x: -400, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-            >
+          <motion.div key="login" className="page-content"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+
+            <motion.div className="form-section"
+              initial={{ x: -400, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.6, ease: 'easeOut' }}>
               <div className="login-form">
                 <div className="logo-header">
                   <FaBookOpen className="book-icon" />
@@ -167,67 +151,37 @@ const LoginPage = () => {
                 <form onSubmit={handleLogin}>
                   <div className="input-group">
                     <label>Email</label>
-                    <input
-                      type="email"
-                      name="email"
-                      placeholder="abc@xyz.com"
-                      required
-                      autoComplete="email"
-                    />
+                    <input type="email" name="email" placeholder="abc@xyz.com" required autoComplete="email" />
                   </div>
                   <div className="input-group">
                     <label>Mot de passe</label>
-                    <input
-                      type="password"
-                      name="password"
-                      placeholder="••••••••"
-                      required
-                      autoComplete="current-password"
-                    />
+                    <input type="password" name="password" placeholder="••••••••" required autoComplete="current-password" />
                   </div>
                   <div className="options">
-                    <label>
-                      <input type="checkbox" /> Se souvenir de moi
-                    </label>
-                    <Link to="/forget-password" className="forgot-password">
-                      Mot de passe oublié ?
-                    </Link>
+                    <label><input type="checkbox" /> Se souvenir de moi</label>
+                    <Link to="/forget-password" className="forgot-password">Mot de passe oublié ?</Link>
                   </div>
-                  <button type="submit" className="login-btn">
-                    Se connecter
-                  </button>
+                  <button type="submit" className="login-btn">Se connecter</button>
                 </form>
 
-                <div className="or-divider">
-                  <span>ou connectez-vous avec</span>
-                </div>
+                <div className="or-divider"><span>ou connectez-vous avec</span></div>
                 <button type="button" className="google-btn" onClick={handleGoogleLogin}>
                   <FcGoogle size={20} /> Google
                 </button>
 
                 <div className="switch-under-form">
                   <p>Pas de compte ?</p>
-                  <button
-                    type="button"
-                    className="switch-btn under-form"
-                    onClick={() => {
-                      setIsSignUp(true);
-                      setError('');
-                    }}
-                  >
+                  <button type="button" className="switch-btn under-form"
+                    onClick={() => { setIsSignUp(true); setError(''); }}>
                     S'inscrire
                   </button>
                 </div>
               </div>
             </motion.div>
 
-            {/* PROMO SECTION DROITE */}
-            <motion.div
-              className="promo-section"
-              initial={{ x: 400, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ duration: 0.6, ease: 'easeOut', delay: 0.2 }}
-            >
+            <motion.div className="promo-section"
+              initial={{ x: 400, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.6, ease: 'easeOut', delay: 0.2 }}>
               <div className="promo-content">
                 <div className="logo-header">
                   <FaBookOpen className="book-icon large" />
@@ -244,21 +198,12 @@ const LoginPage = () => {
             </motion.div>
           </motion.div>
         ) : (
-          /* === PAGE INSCRIPTION === */
-          <motion.div
-            key="signup"
-            className="page-content"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <motion.div
-              className="promo-section"
-              initial={{ x: -400, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-            >
+          <motion.div key="signup" className="page-content"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+
+            <motion.div className="promo-section"
+              initial={{ x: -400, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.6, ease: 'easeOut' }}>
               <div className="promo-content">
                 <div className="logo-header">
                   <FaBookOpen className="book-icon large" />
@@ -268,12 +213,9 @@ const LoginPage = () => {
               </div>
             </motion.div>
 
-            <motion.div
-              className="form-section"
-              initial={{ x: 400, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ duration: 0.6, ease: 'easeOut', delay: 0.2 }}
-            >
+            <motion.div className="form-section"
+              initial={{ x: 400, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.6, ease: 'easeOut', delay: 0.2 }}>
               <div className="login-form">
                 <div className="logo-header">
                   <FaBookOpen className="book-icon" />
@@ -314,21 +256,13 @@ const LoginPage = () => {
                       <option value="enseignant">Enseignant</option>
                     </select>
                   </div>
-                  <button type="submit" className="login-btn">
-                    S'inscrire
-                  </button>
+                  <button type="submit" className="login-btn">S'inscrire</button>
                 </form>
 
                 <div className="switch-under-form">
                   <p>Déjà un compte ?</p>
-                  <button
-                    type="button"
-                    className="switch-btn under-form"
-                    onClick={() => {
-                      setIsSignUp(false);
-                      setError('');
-                    }}
-                  >
+                  <button type="button" className="switch-btn under-form"
+                    onClick={() => { setIsSignUp(false); setError(''); }}>
                     Se connecter
                   </button>
                 </div>

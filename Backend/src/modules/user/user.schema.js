@@ -165,7 +165,40 @@ class User {
         this.is_verified = true;
         return this;
     }
+    async saveVerificationToken(token) {
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 heures
+    await pool.query(
+        'UPDATE users SET verification_token = ?, verification_token_expires = ? WHERE id = ?',
+        [token, expires, this.id]
+    );
+    return this;
+}
 
+async saveResetToken(token) {
+    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 heure
+    await pool.query(
+        'UPDATE users SET reset_password_token = ?, reset_password_expires = ? WHERE id = ?',
+        [token, expires, this.id]
+    );
+    return this;
+}
+// Find user by verification token
+static async findByVerificationToken(token) {
+    const [rows] = await pool.query(
+        'SELECT * FROM users WHERE verification_token = ? AND verification_token_expires > NOW()',
+        [token]
+    );
+    return rows.length > 0 ? new User(rows[0]) : null;
+}
+
+// Clear verification token
+async clearVerificationToken() {
+    await pool.query(
+        'UPDATE users SET verification_token = NULL, verification_token_expires = NULL WHERE id = ?',
+        [this.id]
+    );
+    return this;
+}
     // Hard delete
     async delete() {
         await pool.query('DELETE FROM users WHERE id = ?', [this.id]);

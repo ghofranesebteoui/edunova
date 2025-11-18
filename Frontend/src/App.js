@@ -10,7 +10,8 @@ import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import ForgotPassword from "./pages/forgetPass";
-import ResetPassword from './pages/ResetPassword'; // ⬅️ Import ajouté
+import ResetPassword from './pages/ResetPassword';
+import VerifyEmail from './pages/VerifyEmail';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -20,7 +21,13 @@ function App() {
     const storedUser = localStorage.getItem("user");
     const token = localStorage.getItem("token");
     if (storedUser && token) {
-      setUser(JSON.parse(storedUser));
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error("Erreur parsing user:", error);
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+      }
     }
     setLoading(false);
   }, []);
@@ -47,7 +54,7 @@ function App() {
               justifyContent: "space-between",
             }}
           >
-            <h3>Bienvenue, {user.email}</h3>
+            <h3>Bienvenue, {user.first_name || user.email}</h3>
             <button
               onClick={handleLogout}
               style={{
@@ -71,7 +78,7 @@ function App() {
               !user ? (
                 <LoginPage setUser={setUser} />
               ) : (
-                <Navigate to={`/${user.role}`} />
+                <Navigate to={`/${user.role}`} replace />
               )
             }
           />
@@ -81,7 +88,7 @@ function App() {
               user?.role === "etudiant" ? (
                 <StudentDashboard />
               ) : (
-                <Navigate to="/login" />
+                <Navigate to="/login" replace />
               )
             }
           />
@@ -91,7 +98,7 @@ function App() {
               user?.role === "enseignant" ? (
                 <TeacherDashboard />
               ) : (
-                <Navigate to="/login" />
+                <Navigate to="/login" replace />
               )
             }
           />
@@ -101,17 +108,18 @@ function App() {
               user?.role === "admin" ? (
                 <AdminDashboard />
               ) : (
-                <Navigate to="/login" />
+                <Navigate to="/login" replace />
               )
             }
           />
-          <Route path="/student" element={<StudentDashboard />} />
           
-          {/* Routes de réinitialisation de mot de passe */}
+          {/* Routes publiques */}
           <Route path="/forget-password" element={<ForgotPassword />} />
-          <Route path="/reset-password/:token" element={<ResetPassword />} /> {/* ⬅️ Nouvelle route */}
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
+          <Route path="/verify-email/:token" element={<VerifyEmail />} />
           
-          <Route path="/" element={<Navigate to="/login" />} />
+          {/* Route par défaut - redirige vers /login */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </div>
     </Router>
